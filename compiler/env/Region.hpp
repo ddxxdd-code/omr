@@ -32,6 +32,8 @@
 #include "env/MemorySegment.hpp"
 #include "env/RawAllocator.hpp"
 
+#include "env/RegionLog.hpp"
+
 namespace TR {
 
 class SegmentProvider;
@@ -67,8 +69,8 @@ class Region
       };
 
 public:
-   Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator);
-   Region(const Region &prototype);
+   Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator, bool isHeap = true);
+   Region(const Region &prototype, bool isHeap = true);
    virtual ~Region() throw();
    void * allocate(const size_t bytes, void * hint = 0);
 
@@ -177,6 +179,9 @@ private:
    Destroyer *_lastDestroyer;
 
    static const size_t INITIAL_SEGMENT_SIZE = 4096;
+
+   regionLog *_regionLog = NULL; // regionLog to collect region's usage. Will initialize in constructor, and added to the list in constructor. Will be removed if needed (usage < INITIAL_SEGMENT_SIZE) inn destructor.
+   bool _collectRegionLog = false;
 
    union {
       char data[INITIAL_SEGMENT_SIZE];
