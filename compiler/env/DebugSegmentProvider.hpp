@@ -31,6 +31,8 @@
 #include "env/SegmentAllocator.hpp"
 #include "env/RawAllocator.hpp"
 
+class regionLog;
+
 namespace TR {
 
 /** @class DebugSegmentProvider
@@ -56,9 +58,18 @@ public:
    virtual void release(TR::MemorySegment &segment) throw();
    virtual size_t bytesAllocated() const throw();
    virtual size_t regionBytesAllocated() const throw();
+   virtual size_t regionBytesAllocated() const throw();
+   virtual size_t regionBytesInUse() const throw();
+   virtual size_t regionRealBytesInUse() const throw();
    virtual size_t systemBytesAllocated() const throw();
    virtual size_t allocationLimit() const throw();
    virtual void setAllocationLimit(size_t);
+
+   uint32_t recordEvent() = 0;   // called on creation and destructor of region
+   bool collectRegions() = 0;    // called in constructor of region to check if region should be allocated
+   // head and tail for the double linked list for regionlogs.
+   regionLog *_regionLogListHead = NULL;
+   regionLog *_regionLogListTail = NULL;
 
 private:
    TR::RawAllocator _rawAllocator;

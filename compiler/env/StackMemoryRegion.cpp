@@ -25,7 +25,7 @@
 namespace TR {
 
 StackMemoryRegion::StackMemoryRegion(TR_Memory &trMemory) :
-   Region(trMemory.currentStackRegion()),
+   Region(trMemory.currentStackRegion(), false),
    _trMemory(trMemory),
    _previousStackRegion(_trMemory.registerStackRegion(*this))
    {
