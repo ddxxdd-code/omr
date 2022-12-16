@@ -3,16 +3,23 @@
 
 #pragma once
 
-#include <deque>
 #include <stddef.h>
-#include <stdio.h>
-#include <unordered_map>
-#include "compile/Compilation.hpp"
+#include <deque>
+#include <stack>
+#include "infra/ReferenceWrapper.hpp"
 #include "env/TypedAllocator.hpp"
+#include "env/MemorySegment.hpp"
+#include "env/RawAllocator.hpp"
 #include "env/PersistentAllocator.hpp"
+#include "env/CompilerEnv.hpp"
+#include <unordered_map>
+#include <libunwind.h>
+#include <execinfo.h>
+#include <vector>
 
 #define MAX_BACKTRACE_SIZE 10
 #define REGION_BACKTRACE_DEPTH 3
+#define TARGET_EXECUTABLE_FILE "libj9jit29.so"
 
 template<typename K, typename V>
 using PersistentUnorderedMapAllocator = TR::typed_allocator<std::pair<const K, V>, TR::PersistentAllocator &>;
@@ -76,13 +83,13 @@ private:
    size_t _bytesSegmentProviderInUseFreed;
    size_t _bytesSegmentProviderRealInUseAllocated;
    size_t _bytesSegmentProviderRealInUseFreed;
-   // pointers to prev ane next
-   regionLog *_prev = NULL;
-   regionLog *_next = NULL;
 
    PersistentUnorderedMap<AllocEntry, size_t> _allocMap;
 
 public:
+   // pointers to prev ane next
+   RegionLog *_prev = NULL;
+   RegionLog *_next = NULL;
    // Constructor for regionLog to keep the log of each region object
    RegionLog() :
    _startTime(-2),
@@ -106,6 +113,52 @@ public:
       {
       }
 
+   // double linked list modifyer functions
+   static void regionLogListInsert(RegionLog **head, RegionLog **tail, RegionLog *target)
+       {
+       if (!*tail)
+           {
+           *head = target;
+           *tail = target;
+           }
+       else
+           {
+           target->_prev = *tail;
+           *tail = target;
+           }
+       }
+
+   static void regionLogListRemove(RegionLog **head, RegionLog **tail, RegionLog *target)
+      {
+      // cases: remove only, remove head, remove tail, remove middle
+      if (*head == target && *tail == target)
+         {
+         // remove only
+         *head = NULL;
+         *tail = NULL;
+         }
+      else if (*head == target)
+         {
+         // remove head
+         *head = target->_next;
+         (*head)->_prev = NULL;
+         }
+      else if (*tail == target)
+         {
+         // remove tail
+         *tail = target->_prev;
+         (*tail)->_next = NULL;
+         }
+      else
+         {
+         // remove middle
+         target->_prev->_next = target->_next;
+         target->_next->_prev = target->_prev;
+         }
+      target->_prev = NULL;
+      target->_next = NULL;
+      }
+
    void printRegionLog(FILE *file)
       {
       if (this->_isHeap)
@@ -117,30 +170,30 @@ public:
          fprintf(file, "%s ", "S");
          }
       fprintf(file, "%d %d %d %zu %zu %zu %zu %zu %zu %zu %zu\n", 
-         this->_sequenceNumber, this->_startTime, this->_endTime, 
+         0, this->_startTime, this->_endTime, 
          this->_bytesSegmentProviderAllocated, this->_bytesSegmentProviderFreed, 
          this->_bytesSegmentProviderInUseAllocated, this->_bytesSegmentProviderInUseFreed,
          this->_bytesSegmentProviderRealInUseAllocated, this->_bytesSegmentProviderRealInUseFreed,
          this->_startBytesAllocated, this->_endBytesAllocated);
       // next we print the stack traces of region
-      char **temp = backtrace_symbols((void **)region->_regionTrace, REGION_BACKTRACE_DEPTH);
+      char **temp = backtrace_symbols((void **)this->_regionTrace, REGION_BACKTRACE_DEPTH);
       for (int i = 0; i < REGION_BACKTRACE_DEPTH; i++)
          {
-         putOffset(out_file, temp[i]);
+         putOffset(file, temp[i]);
          }
       free(temp);
-      fprintf(out_file, "\n");
+      fprintf(file, "\n");
       // print stack traces with each callsite
-      for (auto &allocPair : region->_allocMap)
+      for (auto &allocPair : this->_allocMap)
          {
-         fprintf(out_file, "%zu ", allocPair.second);
+         fprintf(file, "%zu ", allocPair.second);
          temp = backtrace_symbols((void **)allocPair.first._trace, MAX_BACKTRACE_SIZE);
          for (int i = 0; i < MAX_BACKTRACE_SIZE; i++)
             {
-            putOffset(out_file, temp[i]);
+            putOffset(file, temp[i]);
             }
          free(temp);
-         fprintf(out_file, "\n");
+         fprintf(file, "\n");
          }
       }
 
@@ -149,52 +202,5 @@ public:
       return memcmp(_regionTrace, other._regionTrace, sizeof(void *)*REGION_BACKTRACE_DEPTH) == 0;
       }
    };
-
-// double linked list modifyer functions
-void regionLogListInsert(regionLog **head, regionLog **tail, regionLog *target)
-   {
-   if (!*tail)
-      {
-      *head = target;
-      *tail = target;
-      return 0;
-      }
-   else
-      {
-      target->_prev = *tail;
-      *tail = target;
-      }
-   }
-
-void regionLogListRemove(regionLog **head, regionLog **tail, regionLog *target)
-   {
-   // cases: remove only, remove head, remove tail, remove middle
-   if (*head == target && *tail == target)
-      {
-      // remove only
-      *head = NULL;
-      *tail = NULL;
-      }
-   else if (*head == target)
-      {
-      // remove head
-      *head = target->_next;
-      *head->_prev = NULL;
-      }
-   else if (*tail == target)
-      {
-      // remove tail
-      *tail = target->_prev;
-      *tail->_next = NULL;
-      }
-   else
-      {
-      // remove middle
-      target->_prev->_next = target->_next;
-      target->_next->_prev = target->_prev;
-      }
-   target->_prev = NULL;
-   target->_next = NULL;
-   }
 
 #endif

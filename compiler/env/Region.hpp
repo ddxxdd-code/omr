@@ -180,7 +180,7 @@ private:
 
    static const size_t INITIAL_SEGMENT_SIZE = 4096;
 
-   regionLog *_regionLog = NULL; // regionLog to collect region's usage. Will initialize in constructor, and added to the list in constructor. Will be removed if needed (usage < INITIAL_SEGMENT_SIZE) inn destructor.
+   RegionLog *_regionLog = NULL; // regionLog to collect region's usage. Will initialize in constructor, and added to the list in constructor. Will be removed if needed (usage < INITIAL_SEGMENT_SIZE) inn destructor.
    bool _collectRegionLog = false;
 
    union {
