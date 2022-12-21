@@ -26,8 +26,9 @@
 
 #include <stddef.h>
 #include <new>
+#include <cstdint>
 
-class regionLog;
+class RegionLog;
 
 namespace TR {
 
@@ -41,14 +42,14 @@ public:
    size_t defaultSegmentSize() { return _defaultSegmentSize; }
    virtual size_t bytesAllocated() const throw() = 0;
    // new counters involved in segment provider
-   virtual size_t regionBytesInUse() const throw() = 0;
-   virtual size_t regionRealBytesInUse() const throw() = 0;
-   void setCollectRegionLog();   // called to set a segment provider to enable region log collection
-   uint32_t recordEvent() = 0;   // called on creation and destructor of region
-   bool collectRegions() = 0;    // called in constructor of region to check if region should be allocated
+   size_t regionBytesInUse() const throw() { return 0; };
+   size_t regionRealBytesInUse() const throw() { return 0; };
+   void setCollectRegionLog() { return; };   // called to set a segment provider to enable region log collection
+   uint32_t recordEvent() { return 0; };   // called on creation and destructor of region
+   bool collectRegions() { return false; };    // called in constructor of region to check if region should be allocated
    // head and tail for the double linked list for regionlogs.
-   regionLog *_regionLogListHead = NULL;
-   regionLog *_regionLogListTail = NULL;
+   RegionLog *_regionLogListHead = NULL;
+   RegionLog *_regionLogListTail = NULL;
 
 
 protected:
