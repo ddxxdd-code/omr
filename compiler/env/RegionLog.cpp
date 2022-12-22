@@ -49,13 +49,22 @@ putOffset(std::FILE *file, char *line)
 void 
 RegionLog::regionLogListInsert(RegionLog **head, RegionLog **tail, RegionLog *target)
     {
-    if (!*tail)
+    if (!target || !head || !tail)
+        {
+        return;
+        }
+    if (*tail == NULL)
         {
         *head = target;
         *tail = target;
         }
     else
         {
+        if (*head == NULL)
+            {
+            fprintf(stderr, "insert to tail but head is null\n");
+            }
+        (*tail)->_next = target;
         target->_prev = *tail;
         *tail = target;
         }
@@ -64,6 +73,14 @@ RegionLog::regionLogListInsert(RegionLog **head, RegionLog **tail, RegionLog *ta
 void 
 RegionLog::regionLogListRemove(RegionLog **head, RegionLog **tail, RegionLog *target)
     {
+    if (!target)
+        {
+        return;
+        }
+    if (!(head && tail))
+        {
+        return;
+        }
     // cases: remove only, remove head, remove tail, remove middle
     if (*head == target && *tail == target)
         {
@@ -75,22 +92,27 @@ RegionLog::regionLogListRemove(RegionLog **head, RegionLog **tail, RegionLog *ta
         {
         // remove head
         *head = target->_next;
-        (*head)->_prev = NULL;
         }
     else if (*tail == target)
         {
         // remove tail
         *tail = target->_prev;
-        (*tail)->_next = NULL;
         }
     else
         {
         // remove middle
-        target->_prev->_next = target->_next;
+        }
+    if (target->_next)
+        {
         target->_next->_prev = target->_prev;
+        }
+    if (target->_prev)
+        {
+        target->_prev->_next = target->_next;
         }
     target->_prev = NULL;
     target->_next = NULL;
+    target->~RegionLog();
     }
 
 void 

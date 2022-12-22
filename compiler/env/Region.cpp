@@ -27,6 +27,8 @@
 #include "infra/ReferenceWrapper.hpp"
 #include "env/TRMemory.hpp"
 
+#define MIN_USAGE_COLLECTED 0
+
 namespace TR {
 
 Region::Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator, bool isHeap) :
@@ -52,7 +54,7 @@ Region::Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocat
       unw_backtrace(trace, REGION_BACKTRACE_DEPTH + 1);
       memcpy(_regionLog->_regionTrace, &trace[1], REGION_BACKTRACE_DEPTH * sizeof(void *));
       // add regionLog to dllist in _segmentProvider
-      RegionLog::regionLogListInsert(&(_segmentProvider._regionLogListHead), &(_segmentProvider._regionLogListTail), _regionLog);
+      RegionLog::regionLogListInsert(_segmentProvider.getRegionLogListHead(), _segmentProvider.getRegionLogListTail(), _regionLog);
       }
    }
 
@@ -79,7 +81,7 @@ Region::Region(const Region &prototype, bool isHeap) :
       unw_backtrace(trace, REGION_BACKTRACE_DEPTH + 1);
       memcpy(_regionLog->_regionTrace, &trace[1], REGION_BACKTRACE_DEPTH * sizeof(void *));
       // add regionLog to dllist in segmentProvider
-      RegionLog::regionLogListInsert(&(_segmentProvider._regionLogListHead), &(_segmentProvider._regionLogListTail), _regionLog);
+      RegionLog::regionLogListInsert(_segmentProvider.getRegionLogListHead(), _segmentProvider.getRegionLogListTail(), _regionLog);
       }
    }
 
@@ -121,9 +123,9 @@ Region::~Region() throw()
    if (_collectRegionLog)
       {
       // remove region log if total usage <= 4096
-      if (_bytesAllocated <= 4096)
+      if (bytesAllocated() <= MIN_USAGE_COLLECTED)
          {
-         RegionLog::regionLogListRemove(&(_segmentProvider._regionLogListHead), &(_segmentProvider._regionLogListTail), _regionLog);
+         RegionLog::regionLogListRemove(_segmentProvider.getRegionLogListHead(), _segmentProvider.getRegionLogListTail(), _regionLog);
          return;
          }
          // log endtime
@@ -178,7 +180,7 @@ Region::allocate(size_t const size, void *hint)
       // check case impossible
       if (_collectRegionLog && _segmentProvider.bytesAllocated() - preRequestBytesAllocated)
          {
-         printf("segment provider changed for new memory allocation in segment, which should never happen!\n");
+         fprintf(stderr, "segment provider changed for new memory allocation in segment, which should never happen!\n");
          }
 
       return _currentSegment.get().allocate(roundedSize);
