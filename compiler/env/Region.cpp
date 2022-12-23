@@ -27,8 +27,6 @@
 #include "infra/ReferenceWrapper.hpp"
 #include "env/TRMemory.hpp"
 
-#define MIN_USAGE_COLLECTED 0
-
 namespace TR {
 
 Region::Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator, bool isHeap) :
@@ -122,9 +120,9 @@ Region::~Region() throw()
    // log changes only when we need them
    if (_collectRegionLog)
       {
-      // remove region log if total usage <= 4096
-      if (bytesAllocated() <= MIN_USAGE_COLLECTED)
+      if (bytesAllocated() <= INITIAL_SEGMENT_SIZE)
          {
+         // discard region of no memory used outside of initial segment
          RegionLog::regionLogListRemove(_segmentProvider.getRegionLogListHead(), _segmentProvider.getRegionLogListTail(), _regionLog);
          return;
          }
