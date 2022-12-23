@@ -31,8 +31,6 @@
 #include "env/SegmentAllocator.hpp"
 #include "env/RawAllocator.hpp"
 
-class RegionLog;
-
 namespace TR {
 
 /** @class DebugSegmentProvider
@@ -61,9 +59,6 @@ public:
    virtual size_t systemBytesAllocated() const throw();
    virtual size_t allocationLimit() const throw();
    virtual void setAllocationLimit(size_t);
-   // head and tail for the double linked list for regionlogs.
-   RegionLog *_regionLogListHead = NULL;
-   RegionLog *_regionLogListTail = NULL;
 
 private:
    TR::RawAllocator _rawAllocator;
