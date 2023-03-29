@@ -29,57 +29,35 @@
 
 namespace TR {
 
-Region::Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator, bool isHeap) :
+Region::Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator, bool isStack) :
    _bytesAllocated(0),
    _segmentProvider(segmentProvider),
    _rawAllocator(rawAllocator),
    _initialSegment(_initialSegmentArea.data, INITIAL_SEGMENT_SIZE),
    _currentSegment(TR::ref(_initialSegment)),
-   _lastDestroyer(NULL),
-   _collectRegionLog(false)
+   _lastDestroyer(NULL)
    {
    if (_segmentProvider.collectRegions())
       {
-      _collectRegionLog = true;
-      _regionLog = new (PERSISTENT_NEW) RegionLog;
-      _regionLog->_isHeap = isHeap;
-      // get timestamp
-      _regionLog->_startTime = _segmentProvider.recordEvent();
-      _regionLog->_startBytesAllocated = _segmentProvider.bytesAllocated();
-      // log constructor into
-      // collect backtrace of the constructor of the region
-      void *trace[REGION_BACKTRACE_DEPTH + 1];
-      unw_backtrace(trace, REGION_BACKTRACE_DEPTH + 1);
-      memcpy(_regionLog->_regionTrace, &trace[1], REGION_BACKTRACE_DEPTH * sizeof(void *));
-      // add regionLog to dllist in _segmentProvider
-      RegionLog::regionLogListInsert(_segmentProvider.getRegionLogListHead(), _segmentProvider.getRegionLogListTail(), _regionLog);
+      _regionLog = new (PERSISTENT_NEW) RegionLog(_segmentProvider.recordEvent(), _segmentProvider.bytesAllocated(), isStack);
+      // add regionLog to doublelinkedlist in _segmentProvider
+      _segmentProvider.segmentProviderRegionLogListInsert(_regionLog);
       }
    }
 
-Region::Region(const Region &prototype, bool isHeap) :
+Region::Region(const Region &prototype, bool isStack) :
    _bytesAllocated(0),
    _segmentProvider(prototype._segmentProvider),
    _rawAllocator(prototype._rawAllocator),
    _initialSegment(_initialSegmentArea.data, INITIAL_SEGMENT_SIZE),
    _currentSegment(TR::ref(_initialSegment)),
-   _lastDestroyer(NULL),
-   _collectRegionLog(false)
+   _lastDestroyer(NULL)
    {
    if (_segmentProvider.collectRegions())
       {
-      _collectRegionLog = true;
-      _regionLog = new (PERSISTENT_NEW) RegionLog;
-      _regionLog->_isHeap = isHeap;
-      // get timestamp
-      _regionLog->_startTime = _segmentProvider.recordEvent();
-      _regionLog->_startBytesAllocated = _segmentProvider.bytesAllocated();
-      // log constructor into
-      // collect backtrace of the constructor of the region
-      void *trace[REGION_BACKTRACE_DEPTH + 1];
-      unw_backtrace(trace, REGION_BACKTRACE_DEPTH + 1);
-      memcpy(_regionLog->_regionTrace, &trace[1], REGION_BACKTRACE_DEPTH * sizeof(void *));
-      // add regionLog to dllist in segmentProvider
-      RegionLog::regionLogListInsert(_segmentProvider.getRegionLogListHead(), _segmentProvider.getRegionLogListTail(), _regionLog);
+      _regionLog = new (PERSISTENT_NEW) RegionLog(_segmentProvider.recordEvent(), _segmentProvider.bytesAllocated(), isStack);
+      // add regionLog to doublelinkedlist in segmentProvider
+      _segmentProvider.segmentProviderRegionLogListInsert(_regionLog);
       }
    }
 
@@ -88,7 +66,7 @@ Region::~Region() throw()
    size_t preReleaseBytesAllocated = 0;
    size_t preReleaseBytesInUse = 0;
    size_t preReleaseBytesRealInUse = 0;
-   if (_collectRegionLog)
+   if (_regionLog)
       {
       preReleaseBytesAllocated = _segmentProvider.bytesAllocated();
       preReleaseBytesInUse = _segmentProvider.regionBytesInUse();
@@ -118,23 +96,24 @@ Region::~Region() throw()
 
    
    // log changes only when we need them
-   if (_collectRegionLog)
+   if (_regionLog)
       {
       if (bytesAllocated() <= INITIAL_SEGMENT_SIZE)
          {
          // discard region of no memory used outside of initial segment
-         RegionLog::regionLogListRemove(_segmentProvider.getRegionLogListHead(), _segmentProvider.getRegionLogListTail(), _regionLog);
+         _segmentProvider.segmentProviderRegionLogListRemove(_regionLog);
          return;
          }
          // log endtime
-         _regionLog->_endTime = _segmentProvider.recordEvent();
-         _regionLog->_endBytesAllocated = _segmentProvider.bytesAllocated();
+         _regionLog->setEndTime(_segmentProvider.recordEvent());
+         _regionLog->setEndBytesAllocated(_segmentProvider.bytesAllocated());
          // log change in usage
-         _regionLog->_bytesSegmentProviderFreed += preReleaseBytesAllocated - _segmentProvider.bytesAllocated();
-         _regionLog->_bytesSegmentProviderInUseFreed += preReleaseBytesInUse - _segmentProvider.regionBytesInUse();
-         _regionLog->_bytesSegmentProviderRealInUseFreed += preReleaseBytesRealInUse - _segmentProvider.regionRealBytesInUse();
+         _regionLog->accumulateMemoryRelease(
+            preReleaseBytesAllocated - _segmentProvider.bytesAllocated(), 
+            preReleaseBytesInUse - _segmentProvider.regionBytesInUse(), 
+            preReleaseBytesRealInUse - _segmentProvider.regionRealBytesInUse());
          // Get total bytes allocated
-         _regionLog->_bytesAllocated = bytesAllocated();
+         _regionLog->setBytesAllocated(bytesAllocated());
       }
    }
 
@@ -147,7 +126,7 @@ Region::allocate(size_t const size, void *hint)
    size_t preRequestBytesAllocated = 0;
    size_t preRequestBytesInUse = 0;
    size_t preRequestBytesRealInUse = 0;
-   if (_collectRegionLog)
+   if (_regionLog)
       {
       struct AllocEntry entry;
       void *trace[MAX_BACKTRACE_SIZE + 1];
@@ -176,10 +155,7 @@ Region::allocate(size_t const size, void *hint)
       _bytesAllocated += roundedSize;
 
       // check case impossible
-      if (_collectRegionLog && _segmentProvider.bytesAllocated() - preRequestBytesAllocated)
-         {
-         fprintf(stderr, "segment provider changed for new memory allocation in segment, which should never happen!\n");
-         }
+      TR_ASSERT(_regionLog && (_segmentProvider.bytesAllocated() - preRequestBytesAllocated > 0), "segment provider changed for new memory allocation in segment, which should never happen!\n");
 
       return _currentSegment.get().allocate(roundedSize);
       }
@@ -190,11 +166,11 @@ Region::allocate(size_t const size, void *hint)
    _bytesAllocated += roundedSize;
 
    // log change in usage if needed
-   if (_collectRegionLog)
+   if (_regionLog)
       {
-      _regionLog->_bytesSegmentProviderAllocated += _segmentProvider.bytesAllocated() - preRequestBytesAllocated;
-      _regionLog->_bytesSegmentProviderInUseAllocated += _segmentProvider.regionBytesInUse() - preRequestBytesInUse;
-      _regionLog->_bytesSegmentProviderRealInUseAllocated += _segmentProvider.regionRealBytesInUse() - preRequestBytesRealInUse;
+      _regionLog->accumulateMemoryIncrease(_segmentProvider.bytesAllocated() - preRequestBytesAllocated,
+         _segmentProvider.regionBytesInUse() - preRequestBytesInUse,
+         _segmentProvider.regionRealBytesInUse() - preRequestBytesRealInUse);
       }
 
    return _currentSegment.get().allocate(roundedSize);
