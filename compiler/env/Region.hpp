@@ -69,8 +69,8 @@ class Region
       };
 
 public:
-   Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator, bool isHeap = true);
-   Region(const Region &prototype, bool isHeap = true);
+   Region(TR::SegmentProvider &segmentProvider, TR::RawAllocator rawAllocator, bool isStack = false);
+   Region(const Region &prototype, bool isStack = false);
    virtual ~Region() throw();
    void * allocate(const size_t bytes, void * hint = 0);
 
@@ -181,7 +181,6 @@ private:
    static const size_t INITIAL_SEGMENT_SIZE = 4096;
 
    RegionLog *_regionLog = NULL; // regionLog to collect region's usage. Will initialize in constructor, and added to the list in constructor. Will be removed if needed (usage < INITIAL_SEGMENT_SIZE) inn destructor.
-   bool _collectRegionLog = false;
 
    union {
       char data[INITIAL_SEGMENT_SIZE];
