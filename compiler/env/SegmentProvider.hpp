@@ -38,7 +38,7 @@ class SegmentProvider
 public:
    virtual TR::MemorySegment& request(size_t requiredSize) = 0;
    virtual void release(TR::MemorySegment& segment) throw() = 0;
-   size_t defaultSegmentSize() { return _defaultSegmentSize; };
+   size_t defaultSegmentSize() const { return _defaultSegmentSize; };
    virtual size_t bytesAllocated() const throw() = 0;
    // new counters involved in segment provider
    virtual size_t regionBytesInUse() const { return 0; };
