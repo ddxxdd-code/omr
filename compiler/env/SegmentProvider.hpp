@@ -27,6 +27,8 @@
 #include <stddef.h>
 #include <new>
 
+class RegionLog;
+
 namespace TR {
 
 class MemorySegment;
@@ -36,8 +38,18 @@ class SegmentProvider
 public:
    virtual TR::MemorySegment& request(size_t requiredSize) = 0;
    virtual void release(TR::MemorySegment& segment) throw() = 0;
-   size_t defaultSegmentSize() { return _defaultSegmentSize; }
+   size_t defaultSegmentSize() const { return _defaultSegmentSize; };
    virtual size_t bytesAllocated() const throw() = 0;
+   // new counters involved in segment provider
+   virtual size_t regionBytesInUse() const { return 0; };
+   virtual size_t regionRealBytesInUse() const { return 0; };
+   virtual void setCollectRegionLog() {};   // called to set a segment provider to enable region log collection
+   virtual int recordEvent() { return 0; };   // called on creation and destructor of region
+   virtual bool collectRegions() { return false; };    // called in constructor of region to check if region should be allocated
+   virtual void setMethodBeingCompiled(const char *methodName, size_t optLevel) {};
+   // head and tail for the double linked list for regionlogs.
+   virtual void segmentProviderRegionLogListInsert(RegionLog *regionLog) {};
+   virtual void segmentProviderRegionLogListRemove(RegionLog *regionLog) {};
 
 
 protected:
